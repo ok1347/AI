@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Input with AI Response</title>
+</head>
+<body>
+    <h1>AI Voice Interaction</h1>
+    <p>Press the button below to record your voice and get a response from the AI.</p>
+
+    <!-- Button to start/stop recording -->
+    <button id="record-btn">🎙️ Start Recording</button>
+    <p id="status">Status: Waiting...</p>
+
+    <!-- Display transcription -->
+    <h2>Transcription:</h2>
+    <p id="transcription">No transcription available yet.</p>
+
+    <!-- Display AI response -->
+    <h2>AI Response:</h2>
+    <p id="ai-response">No response yet.</p>
+
+    <!-- JavaScript -->
+    <script>
+        const recordButton = document.getElementById("record-btn");
+        const statusDisplay = document.getElementById("status");
+        const transcriptionDisplay = document.getElementById("transcription");
+        const aiResponseDisplay = document.getElementById("ai-response");
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // Initialize audio recording
+        async function initRecorder() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            // Capture audio data
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            // When recording stops
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                
+                // Generate a unique filename
+                const uniqueFilename = `recording_${Date.now()}.mp3`;
+                const formData = new FormData();
+                formData.append("audio_data", audioBlob, uniqueFilename);
+
+                statusDisplay.textContent = "Status: Sending audio...";
+
+                // Send the audio file to the Flask server
+                try {
+                    const response = await fetch("/transcribe", {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        transcriptionDisplay.textContent = data.transcription || "Transcription not available.";
+                        aiResponseDisplay.textContent = data.response || "AI response not available.";
+                    } else {
+                        transcriptionDisplay.textContent = "Error during transcription.";
+                        aiResponseDisplay.textContent = "Error fetching AI response.";
+                    }
+                } catch (error) {
+                    transcriptionDisplay.textContent = "An error occurred.";
+                    aiResponseDisplay.textContent = "An error occurred.";
+                }
+
+                statusDisplay.textContent = "Status: Waiting...";
+                audioChunks = []; // Reset for the next recording
+            };
+        }
+
+        // Handle record button clicks
+        recordButton.addEventListener("click", () => {
+            if (!mediaRecorder) {
+                initRecorder();
+                statusDisplay.textContent = "Status: Initializing...";
+                return;
+            }
+
+            if (mediaRecorder.state === "inactive") {
+                mediaRecorder.start();
+                recordButton.textContent = "🛑 Stop Recording";
+                statusDisplay.textContent = "Status: Recording...";
+            } else {
+                mediaRecorder.stop();
+                recordButton.textContent = "🎙️ Start Recording";
+                statusDisplay.textContent = "Status: Processing...";
+            }
+        });
+    </script>
+</body>
+</html>
